@@ -120,25 +120,17 @@ int main(int argc, char** argv) {
     int file_start = ftell(fd);
     wavHeaderFiller(fd);
 
-    ma_device_config deviceConfig;
-    ma_device actualDevice;
-
     // device configuration
-    deviceConfig = ma_device_config_init(ma_device_type_capture);
-    deviceConfig.capture.format = ma_format_s16;
-    deviceConfig.capture.channels = 1;
-    deviceConfig.sampleRate = 44100;
-    deviceConfig.dataCallback = data_callback;
-    deviceConfig.pUserData = fd;
+    struct device ma_device;
 
-    if (ma_device_init(NULL, &deviceConfig, &actualDevice) != MA_SUCCESS) {
+    if (ma_device_init(NULL, &ma_device.deviceConfig, &ma_device.actualDevice) != MA_SUCCESS) {
         printf("initialization error");
         return -1;
     }
 
     int start_audio = ftell(fd);
 
-    ma_device_start(&actualDevice);
+    ma_device_start(&ma_device.actualDevice);
     screenInitialize();
 
     int end_audio = ftell(fd);
@@ -152,6 +144,6 @@ int main(int argc, char** argv) {
     int chunk_actual_size = end_audio - 8;
     fwrite(&chunk_actual_size, sizeof(int), 1, fd);
 
-    ma_device_uninit(&actualDevice);
+    ma_device_uninit(&ma_device.actualDevice);
     fclose(fd);
 }

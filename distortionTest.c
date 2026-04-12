@@ -10,10 +10,14 @@ volatile float current_volume = 0.0f;
 
 // function called whenever a chunk of the audio buffer is full and ready to be elaborated
 void data_callback(ma_device* pDevice, void* pOutput, const void* pInput, ma_uint32 frameCount) {
+    if (pDevice->capture.format != pDevice->playback.format || pDevice->capture.channels != pDevice->playback.channels) {
+        return;
+    }
+
     FILE* fd = (FILE*)pDevice->pUserData;
 
     if(fd == NULL) return;
-    
+
     short* inputSamples = (short*)pInput;
     short denormalized_sample[frameCount];
 
@@ -31,6 +35,8 @@ void data_callback(ma_device* pDevice, void* pOutput, const void* pInput, ma_uin
 
     // here frameCount frames (aka sample) are ridden from pInput and stored inside the filde descriptor fd
     fwrite(denormalized_sample, sizeof(short), frameCount, fd);
+
+    MA_COPY_MEMORY(pOutput, pInput, frameCount * ma_get_bytes_per_frame(pDevice->capture.format, pDevice->capture.channels));
 }
 
 // =========== wave file header =============
@@ -79,9 +85,12 @@ int main(int argc, char** argv) {
     ma_device actualDevice;
 
     // device configuration
-    deviceConfig = ma_device_config_init(ma_device_type_capture);
+    deviceConfig = ma_device_config_init(ma_device_type_duplex);
     deviceConfig.capture.format = ma_format_s16;
     deviceConfig.capture.channels = 1;
+    deviceConfig.capture.shareMode = ma_share_mode_shared;
+    deviceConfig.playback.format = ma_format_s16;
+    deviceConfig.playback.channels = 1;
     deviceConfig.sampleRate = 44100;
     deviceConfig.dataCallback = data_callback;
     deviceConfig.pUserData = fd;
@@ -95,21 +104,10 @@ int main(int argc, char** argv) {
 
     ma_device_start(&actualDevice);
     printf("press CTRL+C to stop \n");
-    while (1) {
-        int bars = (int)(current_volume * 50);
-        printf("\r[");
-        for (int i = 0; i < 50; i++) {
-            if (i < bars) printf("#");
-            else printf(" ");
-        }
-        printf("] %.2f", current_volume);
-        fflush(stdout);
-        
-        usleep(16000);
-    }
+    while (1);
 
     int end_audio = ftell(fd);
-    
+
     ma_device_uninit(&actualDevice);
 
     fseek(fd, -4, start_audio);
@@ -119,6 +117,6 @@ int main(int argc, char** argv) {
     fseek(fd, 4, file_start);
     int chunk_actual_size = end_audio - 8;
     fwrite(&chunk_actual_size, sizeof(int), 1, fd);
-    
+
     fclose(fd);
 }
